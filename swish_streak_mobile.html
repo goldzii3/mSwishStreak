@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <!-- スマホ横画面用：拡大縮小を禁止し、ノッチ（画面の切り欠き）部分まで画面を使う -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <!-- ホーム画面に追加してアイコンから起動したとき、アドレスバーなしの全画面で動くようにする -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Swish Streak">
+    <meta name="theme-color" content="#0f172a">
+    <title>Swish Streak（スウィッシュ・ストリーク）</title>
+    <!-- アイコン一式（icons フォルダ）とアプリ設定（manifest.webmanifest）。このHTMLと同じ場所に置く -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="icons/apple-touch-icon-120.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* 見た目はすべてこのCSSで指定（外部のCSSライブラリは使わない） */
+        *, *::before, *::after { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #0f172a;
+        }
+        body {
+            position: fixed;            /* 引っ張って更新・スクロールを防ぐ */
+            inset: 0;
+            color: #ffffff;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.5;
+            touch-action: manipulation; /* ダブルタップ拡大を防ぐ（スクロールはゲーム部分ごとに止める） */
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none; /* 長押しメニューを出さない */
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior: none;
+        }
+
+        /* ---------- ゲーム画面（画面いっぱい） ---------- */
+        .stage {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+        }
+        canvas {
+            touch-action: none;         /* ゲーム画面でスクロール・拡大が起きないように */
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ---------- 左上のスコア表示 ---------- */
+        .hud {
+            position: absolute;
+            top: calc(8px + env(safe-area-inset-top));
+            left: calc(10px + env(safe-area-inset-left));
+            display: flex;
+            gap: 6px;
+            padding: 4px 6px;
+            background: rgba(15, 23, 42, 0.62);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 12px;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            pointer-events: none;
+            z-index: 5;
+        }
+        .stat {
+            min-width: 44px;
+            text-align: center;
+            padding: 0 6px;
+        }
+        .stat-label {
+            display: block;
+            font-size: 8px;
+            line-height: 1.2;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #94a3b8;
+        }
+        .stat-value {
+            display: block;
+            font-size: 16px;
+            line-height: 1.2;
+            font-weight: 900;
+        }
+        .stat-divider {
+            width: 1px;
+            background: rgba(148, 163, 184, 0.35);
+        }
+        .c-orange  { color: #fb923c; }
+        .c-amber   { color: #fbbf24; }
+        .c-emerald { color: #34d399; }
+
+        /* ---------- 右下のシュートボタン ---------- */
+        .shoot-btn {
+            position: absolute;
+            right: calc(18px + env(safe-area-inset-right));
+            bottom: calc(14px + env(safe-area-inset-bottom));
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            border: 3px solid rgba(255, 255, 255, 0.85);
+            background: radial-gradient(circle at 35% 30%, #fdba74, #f97316 55%, #c2410c);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), inset 0 -4px 8px rgba(0, 0, 0, 0.25);
+            color: #ffffff;
+            font: inherit;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            cursor: pointer;
+            z-index: 6;
+            transition: transform 0.08s, opacity 0.15s, filter 0.15s;
+            touch-action: none;
+        }
+        .shoot-btn .icon { font-size: 30px; line-height: 1; }
+        .shoot-btn .label {
+            font-size: 12px;
+            font-weight: 900;
+            letter-spacing: 0.08em;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+        .shoot-btn.is-pressed { transform: scale(0.9); }
+        /* ボールが飛んでいる間など、投げられないときは少し暗くする */
+        .shoot-btn.is-wait { opacity: 0.55; filter: saturate(0.6); }
+
+        /* ---------- スタート / ゲームオーバー画面 ---------- */
+        .overlay {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            padding-left: calc(12px + env(safe-area-inset-left));
+            padding-right: calc(12px + env(safe-area-inset-right));
+            text-align: center;
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            transition: opacity 0.3s;
+        }
+        .overlay.is-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .panel {
+            width: min(480px, 100%);
+            max-height: 100%;
+            overflow-y: auto;
+            touch-action: pan-y;        /* 画面が低くて収まらないときは、指でスクロールして全部見られる */
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding: 16px 24px 18px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+        .overlay-title {
+            margin: 0 0 4px;
+            font-size: 26px;
+            line-height: 1.2;
+            font-weight: 900;
+            letter-spacing: 0.04em;
+            color: #f97316;
+        }
+        .overlay-title.is-gameover { color: #ef4444; }
+        .overlay-desc {
+            margin: 0 0 12px;
+            font-size: 13px;
+            line-height: 1.55;
+            color: #e2e8f0;
+        }
+        .hl-orange { color: #fb923c; font-weight: 700; }
+        .hl-amber  { color: #fbbf24; font-weight: 700; }
+        .hl-gold   { color: #fcd34d; font-weight: 700; }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px;
+            border: 0;
+            border-radius: 14px;
+            background: linear-gradient(to right, #f97316, #f59e0b);
+            color: #ffffff;
+            font: inherit;
+            font-size: 17px;
+            font-weight: 800;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: transform 0.15s;
+            touch-action: manipulation;
+        }
+        .action-btn:active { transform: scale(0.95); }
+
+        /* ---------- 縦向きのときの案内 ---------- */
+        .rotate-notice {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            padding: 24px;
+            text-align: center;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 16px;
+            font-weight: 700;
+        }
+        .rotate-notice .phone {
+            font-size: 56px;
+            animation: rotate-hint 2s ease-in-out infinite;
+        }
+        @keyframes rotate-hint {
+            0%, 20%   { transform: rotate(0deg); }
+            50%, 80%  { transform: rotate(-90deg); }
+            100%      { transform: rotate(0deg); }
+        }
+        @media (orientation: portrait) {
+            .rotate-notice { display: flex; }
+        }
+
+        /* ---------- ホーム画面追加の案内（iPhone / iPad のブラウザで開いたときだけ） ---------- */
+        .install-hint {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+            margin: 10px 0 0;
+            padding: 0.45em 0.9em;
+            border: 1.5px solid rgba(252, 211, 77, 0.55);
+            border-radius: 8px;
+            background: rgba(252, 211, 77, 0.1);
+            color: #fde68a;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            text-align: left;
+        }
+        .install-hint svg { flex: none; width: 1.3em; height: 1.3em; }
+        .install-hint.is-hidden { display: none; }
+
+        /* 横向きでSafariのツールバーが出て画面が低いときは、案内まで1画面に収まるよう全体を詰める */
+        @media (max-height: 400px) {
+            .overlay { padding-top: 8px; padding-bottom: 8px; }
+            .panel { padding: 10px 20px 12px; border-radius: 16px; }
+            .overlay-title { font-size: 22px; margin-bottom: 2px; }
+            .overlay-desc { font-size: 12px; line-height: 1.45; margin-bottom: 8px; }
+            .action-btn { padding: 9px; font-size: 16px; }
+            .panel .install-hint { margin-top: 8px; font-size: 11.5px; padding: 0.35em 0.8em; }
+        }
+        .rotate-notice .install-hint { font-size: 14px; max-width: 22em; }
+    </style>
+</head>
+<body>
+
+    <div class="stage">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- 左上：スコア -->
+        <div class="hud">
+            <div class="stat">
+                <span class="stat-label">Score</span>
+                <span id="score" class="stat-value c-orange">0</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+                <span class="stat-label">Best</span>
+                <span id="highScore" class="stat-value c-amber">0</span>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat">
+                <span class="stat-label">Combo</span>
+                <span id="multiplier" class="stat-value c-emerald">1x</span>
+            </div>
+        </div>
+
+        <!-- 右下：シュートボタン -->
+        <button id="shootBtn" class="shoot-btn is-wait" aria-label="シュート">
+            <span class="icon">🏀</span>
+            <span class="label">SHOOT</span>
+        </button>
+
+        <!-- スタート / ゲームオーバー用オーバーレイ -->
+        <div id="overlay" class="overlay">
+            <div class="panel">
+                <h2 id="overlayTitle" class="overlay-title">SWISH STREAK</h2>
+                <p id="overlayDesc" class="overlay-desc">右下のシュートボタンでボールを奥へシュート！連続成功で得点が倍増（1, 2, 4, 8…）。一度でも外すとゲームオーバー！<br><span class="hl-gold">10点・100点・1000点…と桁が上がるたびに花火が上がり、3秒間ゴールが1.3倍になるボーナスタイム！</span></p>
+                <button id="actionBtn" class="action-btn">ゲームスタート</button>
+                <p id="installHint" class="install-hint is-hidden">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 9H6v11h12V9h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 15V3M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="install-hint-text"></span>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- スマホが縦向きのときだけ表示 -->
+    <div class="rotate-notice">
+        <div class="phone">📱</div>
+        <div>スマホを横向きにして遊んでね</div>
+        <p id="rotateHint" class="install-hint is-hidden">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 9H6v11h12V9h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 15V3M8 7l4-4 4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="install-hint-text"></span>
+        </p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const scoreEl = document.getElementById('score');
+        const highScoreEl = document.getElementById('highScore');
+        const multiplierEl = document.getElementById('multiplier');
+        const overlay = document.getElementById('overlay');
+        const overlayTitle = document.getElementById('overlayTitle');
+        const overlayDesc = document.getElementById('overlayDesc');
+        const actionBtn = document.getElementById('actionBtn');
+        const shootBtn = document.getElementById('shootBtn');
+        const installHint = document.getElementById('installHint');
+
+        // ===== ホーム画面追加の案内（iPhone / iPad のブラウザで開いたときだけ） =====
+        // ホーム画面のアイコンから起動すると、アドレスバーなしの全画面で遊べる。
+        // すでにアイコンから起動しているとき、iPhone / iPad 以外のときは何も表示しない。
+        // （Android はゲームスタート時に全画面＋横向き固定にするので案内は不要）
+        const installHintText = (() => {
+            const ua = navigator.userAgent || '';
+            const isIOS = /iPhone|iPad|iPod/.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            // iPhone / iPad でホーム画面のアイコンから起動しているかどうかは navigator.standalone で分かる。
+            // （manifest の設定によっては Safari で開いていても「全画面表示」と判定されることがあるため、
+            //   display-mode: fullscreen では判定しない）
+            const standalone = window.navigator.standalone === true ||
+                window.matchMedia('(display-mode: standalone)').matches;
+            if (!isIOS || standalone) return '';
+            // LINEやInstagramなどのアプリ内ブラウザでは「ホーム画面に追加」が使えないので、Safariで開くよう案内
+            if (/Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(ua)) {
+                return 'Safariで開いてから「ホーム画面に追加」すると、全画面で遊べます';
+            }
+            return '共有ボタン →「ホーム画面に追加」から起動すると、全画面で遊べます';
+        })();
+        // チェックモード：URLの最後に ?check を付けて開くと、案内を出すかどうかの判定結果を表示する
+        const hintCheckMode = /[?&]check\b/.test(location.search);
+        const hintDisplayText = hintCheckMode
+            ? `【チェック】iPhone判定: ${/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'はい' : 'いいえ'}` +
+              ` / ホーム画面から起動: ${window.navigator.standalone === true ? 'はい' : 'いいえ'}` +
+              ` / 表示モード: ${['fullscreen', 'standalone', 'minimal-ui', 'browser'].find(m => window.matchMedia(`(display-mode: ${m})`).matches) || '不明'}` +
+              ` / 案内: ${installHintText || '（表示しない）'}`
+            : installHintText;
+
+        document.querySelectorAll('.install-hint-text').forEach(el => { el.textContent = hintDisplayText; });
+        // スタート画面と、縦向きのときの案内画面に表示する
+        installHint.classList.toggle('is-hidden', !hintDisplayText);
+        document.getElementById('rotateHint').classList.toggle('is-hidden', !hintDisplayText);
+
+        // ===== 調整用の定数 =====
+        // ゴールネットの大きさの倍率（1.0 = 最初の大きさ）。リングの幅・ネットの長さ・成功判定がまとめて変わる。
+        // 大きくするほどゴールが入りやすくなる。
+        const NET_SCALE = 1.2;
+
+        // リングの半分の幅（px）。見た目（ネット上部の幅）と成功判定の両方にこの値を使う。
+        const RIM_HALF_WIDTH = 26 * NET_SCALE;
+
+        const BALL_RADIUS = 24;        // ボールの基本半径
+        const BALL_START_SCALE = 1.5;  // 投げた直後の大きさ（手前）
+        const BALL_END_SCALE = 0.35;   // リング到達時の大きさ（奥）
+        const FLIGHT_SPEED = 0.032;    // 1フレームで進む飛行の割合（約32フレームで到達）
+        const FLIGHT_ARC = 150;        // 放物線の高さ
+
+        const HOOP_Y_RATIO = 0.35;     // ゴールの高さ（画面高さに対する割合）
+        const BOARD_W = 140;           // バックボード
+        const BOARD_H = 90;
+        const INNER_W = 50;            // バックボード中央の枠
+        const INNER_H = 36;
+        const NET_BOTTOM_W = 28 * NET_SCALE; // ネット下部の幅
+        const NET_H = 40 * NET_SCALE;        // ネットの長さ
+
+        const GROUND_Y_RATIO = 0.72;   // コートの奥の端（ゴールのスタンドが立つ位置）
+        const HORIZON_Y_RATIO = 0.62;  // 遠くの街並みの足元（花火はここから打ち上がる）
+
+        // ===== ハイスコアの保存（保存できない環境でも止まらないようにする） =====
+        const STORAGE_KEY = 'hoop_highscore';
+
+        function loadHighScore() {
+            try {
+                const value = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+                return Number.isFinite(value) && value > 0 ? value : 0;
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function saveHighScore(value) {
+            try {
+                localStorage.setItem(STORAGE_KEY, String(value));
+            } catch (e) {
+                // 保存できない環境（プライベートブラウズ等）ではそのプレイ中だけ記録する
+            }
+        }
+
+        let gameState = 'START';
+        let score = 0;
+        let highScore = loadHighScore();
+        highScoreEl.textContent = highScore;
+
+        let streak = 0; // 0 = 1点, 1 = 2点, 2 = 4点, 3 = 8点...
+
+        // 描画座標系での画面サイズ
+        // ゲーム内の座標は「画面の高さ = 504」として扱う（PC版の画面と同じ高さ）。
+        // スマホの画面が小さくても大きくても、高さに合わせて全体を拡大縮小するので、
+        // ゴールやボールの大きさ・遊びやすさは機種によって変わらない。横幅は縦横比に合わせて広がる。
+        const LOGICAL_H = 504;
+        let pxPerUnit = 1; // ゲーム内の1単位が実際の画面で何ピクセルになるか
+
+        function viewW() { return canvas.width / pxPerUnit; }
+        function viewH() { return canvas.height / pxPerUnit; }
+
+        // ===== 夜のバスケットコートの背景 =====
+        // 動かない部分は画面サイズが変わったときだけ別のcanvasに描いておき、毎フレームはそれを貼るだけにする。
+        //   skyLayer   : 夜空と月（花火より奥）
+        //   sceneLayer : 街並み・照明塔・フェンス・コート（花火より手前）
+        const skyLayer = document.createElement('canvas');
+        const sceneLayer = document.createElement('canvas');
+        let stars = [];
+        let frameCount = 0;
+
+        // 毎回同じ街並みになるよう、決まった順に乱数を出す
+        function seededRandom(seed) {
+            let s = seed >>> 0;
+            return function () {
+                s = (s + 0x6D2B79F5) >>> 0;
+                let t = s;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        function buildBackground() {
+            const W = viewW();
+            const H = viewH();
+            const dpr = pxPerUnit; // 背景も実際の画面の解像度で描く
+            if (W <= 0 || H <= 0) return;
+
+            for (const layer of [skyLayer, sceneLayer]) {
+                layer.width = Math.round(W * dpr);
+                layer.height = Math.round(H * dpr);
+            }
+            const rand = seededRandom(20261011);
+            const groundY = H * GROUND_Y_RATIO;
+            const horizonY = H * HORIZON_Y_RATIO;
+
+            // ---------- 夜空 ----------
+            let c = skyLayer.getContext('2d');
+            c.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            const sky = c.createLinearGradient(0, 0, 0, groundY);
+            sky.addColorStop(0, '#03050f');
+            sky.addColorStop(0.55, '#0d1438');
+            sky.addColorStop(1, '#2a2456'); // 地平線近くは街明かりでほんのり明るい
+            c.fillStyle = sky;
+            c.fillRect(0, 0, W, H);
+
+            // 月
+            const mx = W * 0.84, my = H * 0.15, mr = Math.min(W, H) * 0.045;
+            const moonGlow = c.createRadialGradient(mx, my, mr * 0.5, mx, my, mr * 4);
+            moonGlow.addColorStop(0, 'rgba(255, 244, 214, 0.30)');
+            moonGlow.addColorStop(1, 'rgba(255, 244, 214, 0)');
+            c.fillStyle = moonGlow;
+            c.beginPath();
+            c.arc(mx, my, mr * 4, 0, Math.PI * 2);
+            c.fill();
+
+            c.fillStyle = '#fdf6dc';
+            c.beginPath();
+            c.arc(mx, my, mr, 0, Math.PI * 2);
+            c.fill();
+            c.fillStyle = 'rgba(190, 178, 140, 0.35)';
+            for (const [ox, oy, or] of [[-0.3, -0.2, 0.22], [0.25, 0.3, 0.16], [0.35, -0.3, 0.1]]) {
+                c.beginPath();
+                c.arc(mx + mr * ox, my + mr * oy, mr * or, 0, Math.PI * 2);
+                c.fill();
+            }
+
+            // 星（またたきは毎フレーム描くので位置だけ決めておく）
+            stars = [];
+            while (stars.length < 90) {
+                const x = rand() * W;
+                const y = rand() * H * 0.55;
+                if (Math.hypot(x - mx, y - my) < mr * 2) continue;
+                stars.push({ x, y, r: 0.4 + rand() * 1.1, phase: rand() * Math.PI * 2, speed: 0.02 + rand() * 0.05 });
+            }
+
+            // ---------- 地上の景色 ----------
+            c = sceneLayer.getContext('2d');
+            c.setTransform(dpr, 0, 0, dpr, 0, 0);
+            c.clearRect(0, 0, W, H);
+
+            // 遠くのビル（窓明かりつき）
+            let x = -10;
+            while (x < W + 10) {
+                const bw = W * (0.035 + rand() * 0.06);
+                const bh = H * (0.06 + rand() * 0.16);
+                const top = horizonY - bh;
+                c.fillStyle = '#0a0f2a';
+                c.fillRect(x, top, bw, bh + 2);
+
+                const cols = Math.floor((bw - 4) / 7);
+                const rows = Math.floor((bh - 6) / 9);
+                for (let r = 0; r < rows; r++) {
+                    for (let col = 0; col < cols; col++) {
+                        if (rand() < 0.25) {
+                            c.fillStyle = rand() < 0.5 ? 'rgba(255, 214, 140, 0.75)' : 'rgba(255, 240, 200, 0.5)';
+                            c.fillRect(x + 3 + col * 7, top + 5 + r * 9, 3, 4);
+                        }
+                    }
+                }
+                x += bw + rand() * W * 0.01;
+            }
+
+            // 公園の木々のシルエット
+            c.fillStyle = '#060a1c';
+            for (let tx = -20; tx < W + 20; tx += W * (0.02 + rand() * 0.02)) {
+                const tr = H * (0.025 + rand() * 0.03);
+                c.beginPath();
+                c.arc(tx, horizonY - tr * 0.3, tr, 0, Math.PI * 2);
+                c.fill();
+            }
+
+            // フェンスの向こうの地面
+            const backGround = c.createLinearGradient(0, horizonY, 0, groundY);
+            backGround.addColorStop(0, '#0a1122');
+            backGround.addColorStop(1, '#111b33');
+            c.fillStyle = backGround;
+            c.fillRect(0, horizonY, W, groundY - horizonY + 1);
+
+            // 照明塔（左右）
+            const lampTopY = H * 0.1;
+            for (const px of [W * 0.06, W * 0.94]) {
+                // 光の筋
+                const beam = c.createLinearGradient(0, lampTopY, 0, H);
+                beam.addColorStop(0, 'rgba(255, 250, 225, 0.10)');
+                beam.addColorStop(1, 'rgba(255, 250, 225, 0)');
+                c.fillStyle = beam;
+                c.beginPath();
+                c.moveTo(px - W * 0.03, lampTopY);
+                c.lineTo(px + W * 0.03, lampTopY);
+                c.lineTo(W * 0.5 + (px - W * 0.5) * 0.2 + W * 0.18, H);
+                c.lineTo(W * 0.5 + (px - W * 0.5) * 0.2 - W * 0.18, H);
+                c.closePath();
+                c.fill();
+
+                // 柱
+                c.fillStyle = '#2a3350';
+                c.fillRect(px - 2.5, lampTopY, 5, groundY - lampTopY);
+
+                // ライトの頭
+                const headW = W * 0.06;
+                const headH = H * 0.035;
+                c.fillStyle = '#1e253f';
+                c.fillRect(px - headW / 2, lampTopY - headH, headW, headH);
+                c.fillStyle = '#fffbe8';
+                for (let i = 0; i < 3; i++) {
+                    c.beginPath();
+                    c.arc(px - headW / 3 + i * headW / 3, lampTopY - headH / 2, headH * 0.32, 0, Math.PI * 2);
+                    c.fill();
+                }
+
+                // ライトのまぶしさ
+                const glow = c.createRadialGradient(px, lampTopY - headH / 2, 0, px, lampTopY - headH / 2, H * 0.16);
+                glow.addColorStop(0, 'rgba(255, 252, 235, 0.55)');
+                glow.addColorStop(1, 'rgba(255, 252, 235, 0)');
+                c.fillStyle = glow;
+                c.beginPath();
+                c.arc(px, lampTopY - headH / 2, H * 0.16, 0, Math.PI * 2);
+                c.fill();
+            }
+
+            // フェンス（金網）
+            const fenceTop = H * 0.5;
+            c.save();
+            c.beginPath();
+            c.rect(0, fenceTop, W, groundY - fenceTop);
+            c.clip();
+            c.strokeStyle = 'rgba(160, 175, 210, 0.16)';
+            c.lineWidth = 1;
+            const fh = groundY - fenceTop;
+            for (let fx = -fh; fx < W + fh; fx += 10) {
+                c.beginPath();
+                c.moveTo(fx, fenceTop);
+                c.lineTo(fx + fh, groundY);
+                c.stroke();
+                c.beginPath();
+                c.moveTo(fx + fh, fenceTop);
+                c.lineTo(fx, groundY);
+                c.stroke();
+            }
+            c.restore();
+
+            c.fillStyle = '#3a4566';
+            for (let fx = 0; fx <= W; fx += W / 8) {
+                c.fillRect(fx - 1.5, fenceTop, 3, groundY - fenceTop);
+            }
+            c.fillRect(0, fenceTop - 2, W, 3); // 上のパイプ
+
+            // ---------- コート ----------
+            const courtTop = groundY + H * 0.015;
+
+            // コートの外側（緑）
+            c.fillStyle = '#1b4d3e';
+            c.fillRect(0, groundY, W, H - groundY);
+
+            // コートの内側（青）。奥が狭く手前が広い台形で奥行きを出す
+            c.fillStyle = '#1d5577';
+            c.beginPath();
+            c.moveTo(W * 0.12, courtTop);
+            c.lineTo(W * 0.88, courtTop);
+            c.lineTo(W * 1.02, H);
+            c.lineTo(-W * 0.02, H);
+            c.closePath();
+            c.fill();
+
+            // 制限区域（ペイントエリア）
+            c.fillStyle = 'rgba(194, 83, 42, 0.85)';
+            c.beginPath();
+            c.moveTo(W * 0.425, courtTop);
+            c.lineTo(W * 0.575, courtTop);
+            c.lineTo(W * 0.61, H * 0.86);
+            c.lineTo(W * 0.39, H * 0.86);
+            c.closePath();
+            c.fill();
+
+            // ライン
+            c.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+            c.lineWidth = 2;
+
+            c.beginPath(); // 外枠
+            c.moveTo(-W * 0.02, H);
+            c.lineTo(W * 0.12, courtTop);
+            c.lineTo(W * 0.88, courtTop);
+            c.lineTo(W * 1.02, H);
+            c.stroke();
+
+            c.beginPath(); // ペイントエリアの枠
+            c.moveTo(W * 0.425, courtTop);
+            c.lineTo(W * 0.39, H * 0.86);
+            c.lineTo(W * 0.61, H * 0.86);
+            c.lineTo(W * 0.575, courtTop);
+            c.stroke();
+
+            c.beginPath(); // フリースローサークル（ボールを投げる位置）
+            c.ellipse(W * 0.5, H * 0.86, W * 0.11, H * 0.045, 0, 0, Math.PI * 2);
+            c.stroke();
+
+            c.beginPath(); // スリーポイントライン
+            c.ellipse(W * 0.5, courtTop, W * 0.36, H * 0.24, 0, 0, Math.PI);
+            c.stroke();
+
+            // 照明で手前の中央が明るくなっている
+            const pool = c.createRadialGradient(W * 0.5, H * 0.92, 0, W * 0.5, H * 0.92, W * 0.5);
+            pool.addColorStop(0, 'rgba(255, 250, 230, 0.14)');
+            pool.addColorStop(1, 'rgba(255, 250, 230, 0)');
+            c.fillStyle = pool;
+            c.fillRect(0, groundY, W, H - groundY);
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.round(rect.width * dpr);
+            canvas.height = Math.round(rect.height * dpr);
+            pxPerUnit = canvas.height / LOGICAL_H;
+            ctx.setTransform(pxPerUnit, 0, 0, pxPerUnit, 0, 0);
+            buildBackground();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawSky() {
+            const W = viewW();
+            const H = viewH();
+            ctx.drawImage(skyLayer, 0, 0, W, H);
+
+            ctx.fillStyle = '#ffffff';
+            for (const s of stars) {
+                ctx.globalAlpha = 0.45 + 0.45 * Math.sin(frameCount * s.speed + s.phase);
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        let hoops = [];
+        let balls = [];
+        let popups = [];
+
+        let globalSpeed = 4.0;
+        let speedChangeTimer = 0;
+        let targetGlobalSpeed = 4.0;
+
+        let missedTimer = 0; // ミス後の演出用タイマー
+
+        // ===== 効果音 =====
+        // 音声ファイルは使わず、ブラウザの Web Audio API でその場で音を合成する（HTML1つで完結）。
+        // ブラウザの決まりで、最初のクリックやキー操作があるまでは音を出せないため、
+        // 「ゲームスタート」やシュートの操作のときに initAudio() で準備する。
+        const SOUND_VOLUME = 0.5;   // 全体の音量（0〜1）
+
+        let audioCtx = null;
+        let masterGain = null;
+        let noiseBuffer = null;     // 「シュッ」という音の元になるノイズ
+
+        function initAudio() {
+            try {
+                if (!audioCtx) {
+                    const AC = window.AudioContext || window.webkitAudioContext;
+                    if (!AC) return;
+                    audioCtx = new AC();
+                    // 花火の音がたくさん重なっても音が割れないよう、最後にコンプレッサーを通す
+                    const compressor = audioCtx.createDynamicsCompressor();
+                    compressor.connect(audioCtx.destination);
+                    masterGain = audioCtx.createGain();
+                    masterGain.gain.value = SOUND_VOLUME;
+                    masterGain.connect(compressor);
+
+                    noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+                    const data = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+                }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) {
+                audioCtx = null; // 音が出せない環境でもゲームは続ける
+            }
+        }
+
+        // 出力先。pan（-1=左 〜 1=右）を指定すると、その方向から聞こえるようにする
+        function outputNode(pan) {
+            if (!pan || !audioCtx.createStereoPanner) return masterGain;
+            const panner = audioCtx.createStereoPanner();
+            panner.pan.value = Math.max(-1, Math.min(1, pan));
+            panner.connect(masterGain);
+            return panner;
+        }
+
+        // 音程のある音（start秒後から dur秒間）。freqEnd を指定すると音程がその値まで変化する
+        function playTone(freq, start, dur, type, vol, freqEnd, pan) {
+            const t = audioCtx.currentTime + start;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, t);
+            if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            osc.connect(gain);
+            gain.connect(outputNode(pan));
+            osc.start(t);
+            osc.stop(t + dur + 0.05);
+        }
+
+        // ノイズを使った「シュッ」「サッ」という音。フィルターの周波数を f1 → f2 に動かす
+        function playNoise(start, dur, filterType, f1, f2, vol, q, pan) {
+            const t = audioCtx.currentTime + start;
+            const src = audioCtx.createBufferSource();
+            src.buffer = noiseBuffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = filterType;
+            filter.Q.value = q;
+            filter.frequency.setValueAtTime(f1, t);
+            filter.frequency.exponentialRampToValueAtTime(f2, t + dur);
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            src.connect(filter);
+            filter.connect(gain);
+            gain.connect(outputNode(pan));
+            src.start(t);
+            src.stop(t + dur + 0.05);
+        }
+
+        const SOUNDS = {
+            // シュート：ボールを押し出す「ポン」＋ 空気を切る「シュッ」
+            shoot() {
+                playTone(150, 0, 0.12, 'sine', 0.4, 60);
+                playNoise(0, 0.3, 'bandpass', 500, 2500, 0.2, 0.8);
+            },
+            // ゴール成功：ネットをくぐる「サッ」＋ チャイム。連続成功が続くほどチャイムが高くなる
+            goal(streakCount) {
+                playNoise(0, 0.25, 'highpass', 2500, 6000, 0.3, 0.7);
+                const base = 784 * Math.pow(2, Math.min(streakCount, 12) / 12); // 1本ごとに半音ずつ上がる
+                playTone(base, 0.05, 0.25, 'triangle', 0.25);
+                playTone(base * 1.4983, 0.13, 0.4, 'triangle', 0.22); // 5度上の音
+            },
+            // ボーナスタイム突入：ファンファーレ（ド・ミ・ソ・ド）＋ きらめき
+            bonus() {
+                const notes = [523.25, 659.25, 783.99, 1046.5];
+                notes.forEach((f, i) => {
+                    const last = i === notes.length - 1;
+                    playTone(f, i * 0.09, last ? 0.6 : 0.16, 'triangle', 0.3);
+                    playTone(f, i * 0.09, last ? 0.6 : 0.16, 'square', 0.05);
+                });
+                playTone(2093, 0.4, 0.2, 'sine', 0.12);
+                playTone(2637, 0.48, 0.3, 'sine', 0.1);
+            },
+            // 花火の打ち上げ：「シュー」という噴射音。半分くらいの玉は「ヒュ〜」と笛の音も鳴る
+            fireworkLaunch(flightSec, pan) {
+                playNoise(0, flightSec * 0.8, 'bandpass', 1500, 3500, 0.05, 1.2, pan);
+                if (Math.random() < 0.5) {
+                    playTone(700, 0.05, flightSec * 0.9, 'sine', 0.035, 1900 + Math.random() * 500, pan);
+                }
+            },
+            // 花火が開く：お腹に響く「ドーン」。節目が大きいほど大きく長く響く
+            fireworkBurst(power, type, pan) {
+                const vol = Math.min(0.9, 0.35 + power * 0.08);
+                const len = Math.min(2.2, 1.0 + power * 0.15);
+                playTone(85, 0, 0.7, 'sine', vol, 32, pan);                          // 低い「ドン」
+                playNoise(0, len, 'lowpass', 2000, 90, vol * 0.8, 0.6, pan);         // 広がる「ゴォォ」
+                // 柳・二重の牡丹は、開いたあとに「パチパチ」と音がはじける
+                if (type === 'willow' || type === 'double') {
+                    const crackles = 14 + power * 2;
+                    for (let i = 0; i < crackles; i++) {
+                        const t = 0.35 + Math.random() * 1.4;
+                        playNoise(t, 0.035, 'highpass', 3500, 5000, 0.05 + Math.random() * 0.05, 0.8,
+                            pan + (Math.random() - 0.5) * 0.4);
+                    }
+                }
+            }
+        };
+
+        function playSound(name, ...args) {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            try {
+                SOUNDS[name](...args);
+            } catch (e) {
+                // 効果音の失敗でゲームを止めない
+            }
+        }
+
+        // ===== 花火 =====
+        // スコアが 10 → 100 → 1000 … と桁が上がるたびに打ち上げる。桁が大きいほど豪華になる。
+        const FW_COLORS = ['#ff4d6d', '#ffd166', '#4cc9f0', '#80ffdb', '#c77dff', '#ff9f1c', '#f1faee', '#7bf1a8'];
+        const MAX_SPARKS = 3000;
+
+        let nextMilestone = 10;       // 次に花火が上がるスコア
+        let reachedMilestone = 0;     // このプレイで到達した最大の節目
+        let rockets = [];
+        let sparks = [];
+        let fireworkQueue = [];       // 打ち上げ待ちの花火
+        let skyFlash = 0;             // 花火が開いた瞬間に空が明るくなる量
+        let banner = null;            // 「100点突破！」の表示
+
+        function fwScale() { return viewH() / 500; }
+
+        function pickColors() {
+            const a = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+            let b = FW_COLORS[Math.floor(Math.random() * FW_COLORS.length)];
+            if (b === a) b = '#ffffff';
+            return [a, b];
+        }
+
+        class Spark {
+            constructor(x, y, vx, vy, color, life, opt = {}) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.color = color;
+                this.life = life;
+                this.maxLife = life;
+                this.gravity = opt.gravity ?? 0.035;
+                this.drag = opt.drag ?? 0.965;
+                this.size = opt.size ?? 2.6;
+                this.flicker = opt.flicker ?? false;
+            }
+            update() {
+                this.vx *= this.drag;
+                this.vy = this.vy * this.drag + this.gravity;
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life--;
+            }
+            draw() {
+                let a = this.life / this.maxLife;
+                if (this.flicker && Math.random() < 0.35) a *= 0.25;
+                ctx.globalAlpha = Math.max(0, a);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = this.size;
+                ctx.beginPath();
+                ctx.moveTo(this.x - this.vx * 3, this.y - this.vy * 3); // 尾を引く
+                ctx.lineTo(this.x, this.y);
+                ctx.stroke();
+            }
+        }
+
+        function addSpark(...args) {
+            if (sparks.length < MAX_SPARKS) sparks.push(new Spark(...args));
+        }
+
+        class Rocket {
+            constructor(x, type, power) {
+                const H = viewH();
+                this.x = x;
+                this.y = H * HORIZON_Y_RATIO;
+                const targetY = H * (0.09 + Math.random() * 0.11);
+                this.gravity = 0.05 * fwScale();
+                this.vy = -Math.sqrt(2 * this.gravity * (this.y - targetY));
+                this.vx = (Math.random() - 0.5) * 0.4;
+                this.type = type;
+                this.power = power;
+                this.colors = pickColors();
+                this.done = false;
+                // 打ち上げ音（画面の左右の位置に合わせて、聞こえる方向も変える）
+                this.pan = (x / viewW() * 2 - 1) * 0.7;
+                const flightSec = (-this.vy / this.gravity) / 60;
+                playSound('fireworkLaunch', flightSec, this.pan);
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                // 上昇中の火の粉
+                if (Math.random() < 0.7) {
+                    addSpark(this.x, this.y, (Math.random() - 0.5) * 0.4, Math.random() * 0.6, '#ffcf8a',
+                        16 + Math.random() * 10, { gravity: 0.02, drag: 0.95, size: 1.2 });
+                }
+                if (this.vy >= -0.3) {
+                    explode(this);
+                    this.done = true;
+                }
+            }
+            draw() {
+                ctx.globalAlpha = 1;
+                ctx.fillStyle = '#fff3d0';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 1.8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function explode(r) {
+            const s = fwScale() * (1 + r.power * 0.08); // 節目が大きいほど大きく開く
+            const [c1, c2] = r.colors;
+            skyFlash = Math.min(0.22, skyFlash + 0.06 + r.power * 0.015);
+            playSound('fireworkBurst', r.power, r.type, r.pan);
+
+            if (r.type === 'peony' || r.type === 'double') {
+                // 丸く開く「牡丹」。double は内側にもう一重
+                const n = Math.round(100 + r.power * 15);
+                for (let i = 0; i < n; i++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp = (3.0 + Math.random() * 1.0) * s;
+                    addSpark(r.x, r.y, Math.cos(ang) * sp, Math.sin(ang) * sp,
+                        Math.random() < 0.6 ? c1 : c2, 55 + Math.random() * 25, { gravity: 0.035 * s });
+                }
+                if (r.type === 'double') {
+                    for (let i = 0; i < n / 2; i++) {
+                        const ang = Math.random() * Math.PI * 2;
+                        const sp = (1.4 + Math.random() * 0.5) * s;
+                        addSpark(r.x, r.y, Math.cos(ang) * sp, Math.sin(ang) * sp,
+                            c2, 50 + Math.random() * 20, { gravity: 0.03 * s, size: 1.6 });
+                    }
+                }
+            } else if (r.type === 'ring') {
+                // 輪の形に開く「型物」。少し傾ける
+                const n = 72;
+                const tilt = Math.random() * Math.PI;
+                const sp = 3.8 * s;
+                for (let i = 0; i < n; i++) {
+                    const ang = (i / n) * Math.PI * 2;
+                    const vx0 = Math.cos(ang) * sp;
+                    const vy0 = Math.sin(ang) * sp * 0.45;
+                    const vx = vx0 * Math.cos(tilt) - vy0 * Math.sin(tilt);
+                    const vy = vx0 * Math.sin(tilt) + vy0 * Math.cos(tilt);
+                    addSpark(r.x, r.y, vx, vy, c1, 60 + Math.random() * 10, { gravity: 0.03 * s });
+                }
+                for (let i = 0; i < 20; i++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp2 = Math.random() * 0.8 * s;
+                    addSpark(r.x, r.y, Math.cos(ang) * sp2, Math.sin(ang) * sp2, c2, 40, { gravity: 0.03 * s });
+                }
+            } else {
+                // 金色の光がしだれ落ちる「柳」
+                const n = Math.round(110 + r.power * 15);
+                for (let i = 0; i < n; i++) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const sp = (1.2 + Math.random() * 2.4) * s;
+                    addSpark(r.x, r.y, Math.cos(ang) * sp, Math.sin(ang) * sp,
+                        Math.random() < 0.7 ? '#ffcf6b' : '#fff1c4', 110 + Math.random() * 40,
+                        { gravity: 0.025 * s, drag: 0.975, size: 2, flicker: true });
+                }
+            }
+        }
+
+        // 節目に届いたときの花火大会を予約する
+        function launchFireworkShow(milestone) {
+            const level = Math.round(Math.log10(milestone)); // 10→1, 100→2, 1000→3 …
+            const count = Math.min(3 + (level - 1) * 2, 15);
+            const types = level === 1 ? ['peony']
+                : level === 2 ? ['peony', 'ring']
+                : ['peony', 'ring', 'willow', 'double'];
+
+            let delay = 10;
+            for (let i = 0; i < count; i++) {
+                fireworkQueue.push({
+                    delay,
+                    type: types[Math.floor(Math.random() * types.length)],
+                    power: level,
+                    x: viewW() * (0.15 + Math.random() * 0.7)
+                });
+                delay += level >= 3 ? 8 + Math.random() * 14 : 16 + Math.random() * 16;
+            }
+            // 1000点以上は最後に中央で大きな柳を上げる
+            if (level >= 3) {
+                fireworkQueue.push({ delay: delay + 30, type: 'willow', power: level + 3, x: viewW() * 0.5 });
+            }
+
+            banner = new Banner(`${milestone.toLocaleString()}点 突破！`);
+        }
+
+        function updateFireworks() {
+            for (const item of fireworkQueue) {
+                item.delay--;
+                if (item.delay <= 0) rockets.push(new Rocket(item.x, item.type, item.power));
+            }
+            fireworkQueue = fireworkQueue.filter(item => item.delay > 0);
+
+            for (const r of rockets) r.update();
+            rockets = rockets.filter(r => !r.done);
+
+            for (const s of sparks) s.update();
+            sparks = sparks.filter(s => s.life > 0);
+
+            skyFlash *= 0.9;
+            if (banner) {
+                banner.update();
+                if (banner.done) banner = null;
+            }
+        }
+
+        function drawFireworks() {
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter'; // 光が重なると明るくなる
+            ctx.lineCap = 'round';
+            for (const s of sparks) s.draw();
+            for (const r of rockets) r.draw();
+            ctx.restore();
+
+            if (skyFlash > 0.005) {
+                ctx.fillStyle = `rgba(255, 236, 214, ${skyFlash})`;
+                ctx.fillRect(0, 0, viewW(), viewH());
+            }
+        }
+
+        class Banner {
+            constructor(text) {
+                this.text = text;
+                this.t = 0;
+                this.life = 150;
+            }
+            get done() { return this.t >= this.life; }
+            update() { this.t++; }
+            draw() {
+                const W = viewW();
+                const H = viewH();
+                const appear = Math.min(1, this.t / 12);
+                const fade = this.t > this.life - 30 ? (this.life - this.t) / 30 : 1;
+                const pop = 1 + Math.sin(appear * Math.PI) * 0.25; // 出てくるときに少し弾む
+
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, fade) * appear;
+                ctx.translate(W / 2, H * 0.56);
+                ctx.scale(pop, pop);
+                ctx.font = `900 ${Math.round(H * 0.075)}px Inter, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                const grad = ctx.createLinearGradient(0, -H * 0.04, 0, H * 0.04);
+                grad.addColorStop(0, '#fff6c2');
+                grad.addColorStop(0.5, '#ffd34d');
+                grad.addColorStop(1, '#ff9f1c');
+
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = 7;
+                ctx.strokeStyle = 'rgba(40, 12, 0, 0.85)';
+                ctx.strokeText(this.text, 0, 0);
+                ctx.shadowColor = 'rgba(255, 200, 80, 0.8)';
+                ctx.shadowBlur = 18;
+                ctx.fillStyle = grad;
+                ctx.fillText(this.text, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        // ゴールの中心yからリングの高さを求める
+        function rimYFor(cy) {
+            const boardY = cy - BOARD_H / 2 - 15;
+            const innerY = boardY + 22;
+            return innerY + INNER_H - 4;
+        }
+
+        // ボールを1つ描く
+        function drawBall(x, y, r, alpha = 1) {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = '#f97316';
+            ctx.fill();
+            ctx.lineWidth = r / 12;
+            ctx.strokeStyle = '#7c2d12';
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x - r, y);
+            ctx.lineTo(x + r, y);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // ===== ボーナスタイム =====
+        // 花火が上がると、その後に流れてくるゴールが1.3倍の大きさになる。
+        // 3秒のカウントダウンは、大きいゴールが画面に入ってきた瞬間から始まる。
+        //   none    : 通常
+        //   pending : 花火が上がり、大きいゴールが画面に入ってくるのを待っている
+        //   active  : カウントダウン中
+        const BONUS_DURATION_MS = 3000;   // ボーナスタイムの長さ（ミリ秒）
+        const BONUS_HOOP_SCALE = 1.3;     // ボーナス中のゴールの大きさ（倍）
+
+        let bonusState = 'none';
+        let bonusUntil = 0;               // カウントダウンが終わる時刻
+
+        // 今作るゴールを大きくするか
+        function bonusSpawnsBig() {
+            return bonusState !== 'none';
+        }
+
+        // 花火が上がったときに呼ぶ
+        function startBonusTime() {
+            if (bonusState === 'none') {
+                bonusState = 'pending';
+                refreshOffscreenHoops();
+            } else if (bonusState === 'active') {
+                // ボーナス中に次の花火が上がったら、そこから改めて延長
+                bonusUntil = performance.now() + BONUS_DURATION_MS;
+            }
+            // pending 中はすでに大きいゴールが向かってきているので何もしない
+        }
+
+        // 毎フレーム呼んで、カウントダウンの開始と終了を管理する
+        function updateBonusTime() {
+            const W = viewW();
+            if (bonusState === 'pending') {
+                // 大きいゴールの端が画面の右端から入ってきたらカウントダウン開始
+                if (hoops.some(h => h.scale > 1 && h.x - h.halfWidth < W)) {
+                    bonusState = 'active';
+                    bonusUntil = performance.now() + BONUS_DURATION_MS;
+                    playSound('bonus');
+                }
+            } else if (bonusState === 'active' && performance.now() >= bonusUntil) {
+                // 終わったら、まだ見えていない大きいゴールを普通のゴールに入れ替える
+                bonusState = 'none';
+                refreshOffscreenHoops();
+            }
+        }
+
+        // まだ画面に入っていないゴールを消す。空いた所には gameLoop が今の大きさのゴールを補充するので、
+        // ボーナス開始直後から大きいゴールが流れてきて、終了直後からは普通のゴールに戻る。
+        // （画面に見えているゴールは急に大きさを変えない）
+        function refreshOffscreenHoops() {
+            const W = viewW();
+            hoops = hoops.filter(h => h.x - h.halfWidth < W);
+        }
+
+        function drawRoundRect(x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.arcTo(x + w, y, x + w, y + h, r);
+            ctx.arcTo(x + w, y + h, x, y + h, r);
+            ctx.arcTo(x, y + h, x, y, r);
+            ctx.arcTo(x, y, x + w, y, r);
+            ctx.closePath();
+        }
+
+        // 画面上部の「BONUS TIME」表示（残り時間のバーつき）
+        function drawBonusHud() {
+            if (bonusState === 'none') return;
+            const pending = bonusState === 'pending';
+            const remain = pending
+                ? BONUS_DURATION_MS / 1000
+                : Math.max(0, (bonusUntil - performance.now()) / 1000);
+            const W = viewW();
+            const w = 260, h = 40;
+            const x = W / 2 - w / 2, y = 10;
+
+            ctx.save();
+            // 残り1秒を切ったら点滅して終わりが近いことを知らせる
+            if (!pending && remain < 1 && Math.floor(remain * 4) % 2 === 0) ctx.globalAlpha = 0.55;
+
+            drawRoundRect(x, y, w, h, 12);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+            ctx.fill();
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#fbbf24';
+            ctx.stroke();
+
+            ctx.font = '900 15px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#fcd34d';
+            const label = pending
+                ? `BONUS TIME! 大きいゴールが来るよ！`
+                : `BONUS TIME! ゴール${BONUS_HOOP_SCALE}倍  ${remain.toFixed(1)}秒`;
+            ctx.fillText(label, W / 2, y + 17);
+
+            // 残り時間のバー
+            const barW = (w - 24) * Math.max(0, remain / (BONUS_DURATION_MS / 1000));
+            ctx.fillStyle = 'rgba(251, 191, 36, 0.25)';
+            ctx.fillRect(x + 12, y + h - 9, w - 24, 4);
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(x + 12, y + h - 9, barW, 4);
+            ctx.restore();
+        }
+
+        // ゴール各部の位置は「リングの高さ」を0とした相対位置。
+        // 大きいゴールもリングの高さを中心に拡大するので、ボールが届く高さは大きさに関係なく同じ。
+        const BOARD_TOP = -54;  // バックボードの上端
+        const INNER_TOP = -32;  // バックボード中央の枠の上端
+        const STAND_TOP = 46;   // スタンドの上端
+
+        class Hoop {
+            constructor(xPos) {
+                this.x = xPos;
+                this.y = viewH() * HOOP_Y_RATIO;
+                this.scale = bonusSpawnsBig() ? BONUS_HOOP_SCALE : 1;
+            }
+
+            get rimY() { return rimYFor(this.y); }
+            get halfWidth() { return (BOARD_W / 2) * this.scale; }
+
+            update(speed) {
+                this.x -= speed;
+            }
+
+            // ボールより奥に描く部分：スタンド・バックボード
+            drawBack() {
+                const s = this.scale;
+                const cx = this.x;
+                const rimY = this.rimY;
+                const groundY = viewH() * GROUND_Y_RATIO;
+
+                // --- 1. スタンドポール（下部の台形・ハの字構造） ---
+                // 夜の背景で見えるよう、照明に照らされた明るい金属色にしている
+                const baseWidth = 90 * s;
+                const topWidth = 28 * s;
+                const standTop = rimY + STAND_TOP * s;
+
+                ctx.strokeStyle = '#94a3b8';
+                ctx.lineWidth = 8;
+                ctx.beginPath();
+                ctx.moveTo(cx - baseWidth / 2, groundY);
+                ctx.lineTo(cx + baseWidth / 2, groundY);
+                ctx.lineTo(cx + topWidth / 2, standTop);
+                ctx.lineTo(cx - topWidth / 2, standTop);
+                ctx.closePath();
+                ctx.stroke();
+
+                // ここから先はリングの中心を原点にして、大きさの倍率をかけて描く
+                ctx.save();
+                ctx.translate(cx, rimY);
+                ctx.scale(s, s);
+
+                // --- 2. バックボード（サーモンピンク / オレンジベージュ系） ---
+                ctx.fillStyle = '#e8a27c';
+                ctx.fillRect(-BOARD_W / 2, BOARD_TOP, BOARD_W, BOARD_H);
+
+                // ボーナスで大きくなったゴールは枠を金色にして目立たせる
+                ctx.strokeStyle = s > 1 ? '#fbbf24' : '#000000';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(-BOARD_W / 2, BOARD_TOP, BOARD_W, BOARD_H);
+
+                // --- 3. バックボード中央の枠（グレー背景 + 濃い枠） ---
+                ctx.fillStyle = '#bcbdbe';
+                ctx.fillRect(-INNER_W / 2, INNER_TOP, INNER_W, INNER_H);
+
+                ctx.strokeStyle = '#3a3a3a';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(-INNER_W / 2, INNER_TOP, INNER_W, INNER_H);
+
+                ctx.restore();
+            }
+
+            // ボールより手前に描く部分：ネットとリム（ゴールしたボールがネットの中を通って見える）
+            drawFront() {
+                const netTopW = RIM_HALF_WIDTH * 2;
+
+                ctx.save();
+                ctx.translate(this.x, this.rimY);
+                ctx.scale(this.scale, this.scale);
+
+                // --- 4. ネット ---
+                ctx.beginPath();
+                ctx.moveTo(-netTopW / 2, 0);
+                ctx.lineTo(netTopW / 2, 0);
+                ctx.lineTo(NET_BOTTOM_W / 2, NET_H);
+                ctx.lineTo(-NET_BOTTOM_W / 2, NET_H);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(230, 230, 230, 0.4)';
+                ctx.fill();
+
+                ctx.strokeStyle = '#0f172a';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // ネットの網目（間隔もネットの大きさに合わせる）
+                const mesh = 10 * NET_SCALE;
+                for (let i = -2; i <= 3; i++) {
+                    ctx.beginPath();
+                    const startX = (i * mesh) - mesh;
+                    const endX = startX + mesh * 2.2;
+                    ctx.moveTo(Math.max(-netTopW / 2, Math.min(netTopW / 2, startX)), 0);
+                    ctx.lineTo(Math.max(-NET_BOTTOM_W / 2, Math.min(NET_BOTTOM_W / 2, endX)), NET_H);
+                    ctx.stroke();
+                }
+
+                for (let i = -2; i <= 3; i++) {
+                    ctx.beginPath();
+                    const startX = -(i * mesh) + mesh;
+                    const endX = startX - mesh * 2.2;
+                    ctx.moveTo(Math.max(-netTopW / 2, Math.min(netTopW / 2, startX)), 0);
+                    ctx.lineTo(Math.max(-NET_BOTTOM_W / 2, Math.min(NET_BOTTOM_W / 2, endX)), NET_H);
+                    ctx.stroke();
+                }
+
+                // --- 5. リム ---
+                ctx.beginPath();
+                ctx.moveTo(-netTopW / 2 - 2, 0);
+                ctx.lineTo(netTopW / 2 + 2, 0);
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#0f172a';
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        // 1つ前のゴールの右に、新しいゴールを並べる。
+        // 間隔は2つのゴールの大きさに合わせて広げ、大きいゴール同士が重ならないようにする。
+        function spawnHoopAfter(lastHoop) {
+            const hoop = new Hoop(0);
+            const lastScale = lastHoop ? lastHoop.scale : 1;
+            const baseX = lastHoop ? lastHoop.x : viewW();
+            // 間隔は普通の大きさ同士で180px〜320px
+            hoop.x = baseX + (180 + Math.random() * 140) * (lastScale + hoop.scale) / 2;
+            // 画面の中に突然現れないよう、必ず画面の右外から入ってくる位置にする
+            hoop.x = Math.max(hoop.x, viewW() + hoop.halfWidth + 10);
+            hoops.push(hoop);
+        }
+
+        // ボールの状態（phase）
+        //   flight : 飛行中
+        //   goal   : リングを通過してネットの中を落ちていく
+        //   rim    : リングに当たって弾かれた
+        //   board  : バックボードに当たって手前に跳ね返った
+        //   air    : ゴールの横を素通りして奥へ落ちていく
+        class Ball {
+            constructor() {
+                this.x = viewW() * 0.5;
+                this.startY = viewH() * 0.88;
+                // ボールの下端がちょうどリングの高さに来る位置まで飛ぶ
+                this.endY = rimYFor(viewH() * HOOP_Y_RATIO) - BALL_RADIUS * BALL_END_SCALE;
+                this.y = this.startY;
+
+                this.progress = 0;
+                this.scale = BALL_START_SCALE;
+                this.alpha = 1;
+                this.phase = 'flight';
+                this.done = false;
+
+                this.hoop = null; // ゴールしたときのゴール
+                this.dx = 0;      // ゴール中心からの横ずれ
+                this.vx = 0;
+                this.vy = 0;
+                this.gravity = 0;
+                this.scaleSpeed = 0;
+            }
+
+            get radius() { return BALL_RADIUS * this.scale; }
+
+            // 描画する層：behind = ゴールより奥 / net = ボードとネットの間 / front = 一番手前
+            get layer() {
+                if (this.phase === 'goal') return 'net';
+                if (this.phase === 'air') return 'behind';
+                return 'front';
+            }
+
+            startGoal(hoop, dx) {
+                this.phase = 'goal';
+                this.hoop = hoop;
+                this.dx = dx;
+                this.vy = 1;
+            }
+
+            startMiss(type, dx) {
+                this.phase = type;
+                if (type === 'rim') {
+                    // 当たった側へ弾かれ、少し手前に戻ってくる
+                    this.vx = Math.sign(dx) * 2.5 - globalSpeed * 0.6;
+                    this.vy = -3.5;
+                    this.gravity = 0.3;
+                    this.scaleSpeed = 0.004;
+                } else if (type === 'board') {
+                    // ボードに当たって手前へ跳ね返る
+                    this.vx = -globalSpeed * 0.8;
+                    this.vy = -1.5;
+                    this.gravity = 0.3;
+                    this.scaleSpeed = 0.006;
+                } else {
+                    // 何にも当たらず奥へ落ちていく
+                    this.vx = 0;
+                    this.vy = 1.5;
+                    this.gravity = 0.25;
+                    this.scaleSpeed = -0.002;
+                }
+            }
+
+            update() {
+                if (this.phase === 'flight') {
+                    this.progress += FLIGHT_SPEED;
+                    if (this.progress >= 1) {
+                        this.progress = 1;
+                        this.y = this.endY;
+                        this.scale = BALL_END_SCALE;
+                        judgeShot(this);
+                        return;
+                    }
+                    const p = this.progress;
+                    const linearY = this.startY + (this.endY - this.startY) * p;
+                    this.y = linearY - Math.sin(p * Math.PI) * FLIGHT_ARC;
+                    this.scale = BALL_START_SCALE - (BALL_START_SCALE - BALL_END_SCALE) * p;
+                    return;
+                }
+
+                if (this.phase === 'goal') {
+                    // ゴールと一緒に流れながら、リングの中心へ寄りつつネットの中を落ちる
+                    this.dx *= 0.8;
+                    this.x = this.hoop.x + this.dx;
+                    this.vy += 0.25;
+                    this.y += this.vy;
+                    if (this.y > this.hoop.rimY + NET_H * this.hoop.scale + this.radius) {
+                        this.alpha -= 0.1;
+                    }
+                } else {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.vy += this.gravity;
+                    this.scale = Math.max(0.2, Math.min(0.8, this.scale + this.scaleSpeed));
+                    this.alpha -= 0.02;
+                }
+
+                if (this.alpha <= 0 || this.y > viewH() + 50) {
+                    this.done = true;
+                }
+            }
+
+            draw() {
+                drawBall(this.x, this.y, this.radius, Math.max(0, this.alpha));
+            }
+        }
+
+        class PopupText {
+            constructor(text, x, y, color) {
+                this.text = text;
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.alpha = 1;
+                this.vy = -1.2;
+            }
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.018;
+            }
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = '900 22px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+                ctx.shadowBlur = 4;
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        // ボールがリングの高さに届いた瞬間の判定
+        function judgeShot(ball) {
+            // いちばん近いゴールを探す
+            let nearest = null;
+            let nearestDist = Infinity;
+            for (const hoop of hoops) {
+                const d = Math.abs(ball.x - hoop.x);
+                if (d < nearestDist) {
+                    nearestDist = d;
+                    nearest = hoop;
+                }
+            }
+
+            const dx = nearest ? ball.x - nearest.x : Infinity;
+            const adx = Math.abs(dx);
+
+            const hoopScale = nearest ? nearest.scale : 1;
+
+            if (adx <= RIM_HALF_WIDTH * hoopScale) {
+                // ボールの中心がリングの内側 → ゴール
+                ball.startGoal(nearest, dx);
+
+                const earnedPoints = Math.pow(2, streak);
+                score += earnedPoints;
+
+                if (score > highScore) {
+                    highScore = score;
+                    saveHighScore(highScore);
+                    highScoreEl.textContent = highScore;
+                }
+
+                popups.push(new PopupText(`+${earnedPoints}`, nearest.x, nearest.rimY - 19 * hoopScale, '#4ade80'));
+                playSound('goal', streak);
+                streak++;
+
+                // 10 → 100 → 1000 … に届いたら花火 ＋ ボーナスタイム
+                while (score >= nextMilestone && Number.isFinite(nextMilestone)) {
+                    launchFireworkShow(nextMilestone);
+                    startBonusTime();
+                    reachedMilestone = nextMilestone;
+                    nextMilestone = Math.pow(10, Math.round(Math.log10(nextMilestone)) + 1);
+                }
+            } else {
+                // ミス：どこに当たったかで外れ方を変える
+                if (adx <= RIM_HALF_WIDTH * hoopScale + ball.radius) {
+                    ball.startMiss('rim', dx);
+                } else if (adx <= (BOARD_W / 2) * hoopScale) {
+                    ball.startMiss('board', dx);
+                } else {
+                    ball.startMiss('air', dx);
+                }
+
+                gameState = 'WAIT_GAMEOVER';
+                missedTimer = 120;
+                popups.push(new PopupText('MISS!', ball.x, ball.endY - 20, '#ef4444'));
+            }
+
+            scoreEl.textContent = score;
+            multiplierEl.textContent = Math.pow(2, streak) + 'x';
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            overlayTitle.textContent = 'GAME OVER';
+            overlayTitle.classList.add('is-gameover');
+            const fireworkLine = reachedMilestone > 0
+                ? `<br><span class="hl-gold">🎆 ${reachedMilestone.toLocaleString()}点突破の花火まで到達！</span>`
+                : '';
+            overlayDesc.innerHTML = `スコア: <span class="hl-orange">${score}点</span><br>ハイスコア: <span class="hl-amber">${highScore}点</span>${fireworkLine}<br>シュートを外してしまいました！`;
+            actionBtn.textContent = 'もう一度プレイ';
+            installHint.classList.add('is-hidden'); // 案内はスタート画面だけ。ゲームオーバー画面では出さない
+            overlay.classList.remove('is-hidden');
+        }
+
+        function shootBall() {
+            initAudio();
+            if (gameState !== 'PLAYING') return;
+            // 飛んでいるボールがある間は次を投げられない（ネットを落ちている途中なら投げられる）
+            if (balls.some(b => b.phase === 'flight')) return;
+            balls.push(new Ball());
+            playSound('shoot');
+        }
+
+        // スペースキーは押しっぱなしにすると自動で連打扱いになるため、
+        // 一度離すまでは次のボールを投げられないようにする
+        let spaceHeld = false;
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code !== 'Space') return;
+            e.preventDefault();
+            if (e.repeat || spaceHeld) return;
+            spaceHeld = true;
+            shootBall();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code !== 'Space') return;
+            e.preventDefault(); // フォーカス中のボタンがスペースで押されてしまうのも防ぐ
+            spaceHeld = false;
+        });
+
+        // 押したまま別のウィンドウに切り替えた場合に備えて解除しておく
+        window.addEventListener('blur', () => { spaceHeld = false; });
+
+        // シュートボタンは指が触れた瞬間に反応させる（click だと指を離すまで遅れるため）
+        shootBtn.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            shootBtn.classList.add('is-pressed');
+            shootBall();
+        });
+        for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
+            shootBtn.addEventListener(type, () => shootBtn.classList.remove('is-pressed'));
+        }
+        actionBtn.addEventListener('click', startGame);
+
+        // iPhoneでは指を離したタイミングでないと音を出す準備ができないことがあるため、ここでも準備する
+        document.addEventListener('touchend', initAudio, { passive: true });
+        // 長押しメニューを出さない
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // スマホのブラウザで遊ぶときは、できれば全画面＋横向き固定にする（対応していない機種では何もしない）
+        function tryFullscreenLandscape() {
+            try {
+                const isTouch = window.matchMedia('(pointer: coarse)').matches;
+                const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+                if (!isTouch || standalone || document.fullscreenElement) return;
+                const el = document.documentElement;
+                if (!el.requestFullscreen) return;
+                el.requestFullscreen({ navigationUI: 'hide' })
+                    .then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape'))
+                    .catch(() => {});
+            } catch (e) {
+                // 全画面にできなくてもゲームは遊べる
+            }
+        }
+
+
+        function startGame() {
+            initAudio(); // 「ゲームスタート」のタップで音を出せる状態にする
+            tryFullscreenLandscape();
+            gameState = 'PLAYING';
+            score = 0;
+            streak = 0;
+            scoreEl.textContent = score;
+            multiplierEl.textContent = '1x';
+            hoops = [];
+            balls = [];
+            popups = [];
+
+            nextMilestone = 10;
+            reachedMilestone = 0;
+            rockets = [];
+            sparks = [];
+            fireworkQueue = [];
+            skyFlash = 0;
+            banner = null;
+
+            bonusState = 'none';
+            bonusUntil = 0;
+
+            globalSpeed = 3.5;
+            targetGlobalSpeed = 3.5;
+            speedChangeTimer = 0;
+
+            hoops.push(new Hoop(viewW() + 100));
+            for (let i = 0; i < 4; i++) {
+                spawnHoopAfter(hoops[hoops.length - 1]);
+            }
+
+            overlay.classList.add('is-hidden');
+        }
+
+        function drawBallsOnLayer(layer) {
+            for (const ball of balls) {
+                if (ball.layer === layer) ball.draw();
+            }
+        }
+
+        // シュートボタンの明るさ（投げられるときだけ明るく）
+        let shootReady = null;
+        function updateShootButton() {
+            const ready = gameState === 'PLAYING' && !balls.some(b => b.phase === 'flight');
+            if (ready !== shootReady) {
+                shootReady = ready;
+                shootBtn.classList.toggle('is-wait', !ready);
+            }
+        }
+
+        function gameLoop() {
+            const width = viewW();
+            const height = viewH();
+            frameCount++;
+
+            ctx.clearRect(0, 0, width, height);
+
+            // --- 背景（奥から：夜空 → 花火 → 街並み・コート） ---
+            updateFireworks();
+            drawSky();
+            drawFireworks();
+            ctx.drawImage(sceneLayer, 0, 0, width, height);
+
+            if (gameState === 'PLAYING' || gameState === 'WAIT_GAMEOVER') {
+                // --- 速度の変化 ---
+                speedChangeTimer++;
+                if (speedChangeTimer > 180) {
+                    targetGlobalSpeed = 2.0 + Math.random() * 6.0;
+                    speedChangeTimer = 0;
+                }
+                globalSpeed += (targetGlobalSpeed - globalSpeed) * 0.03;
+
+                // --- 更新 ---
+                for (const hoop of hoops) hoop.update(globalSpeed);
+                hoops = hoops.filter(h => h.x >= -200);
+
+                // ボーナスタイムのカウントダウン開始・終了
+                updateBonusTime();
+
+                // 右側にゴールを補充
+                while (hoops.length === 0 || hoops[hoops.length - 1].x < width + 350) {
+                    spawnHoopAfter(hoops[hoops.length - 1]);
+                }
+
+                for (const ball of balls) ball.update();
+                balls = balls.filter(b => !b.done);
+
+                for (const popup of popups) popup.update();
+                popups = popups.filter(p => p.alpha > 0);
+
+                // --- 描画（奥から手前の順） ---
+                drawBallsOnLayer('behind');          // ゴールの横を素通りしたボール
+                for (const hoop of hoops) hoop.drawBack();
+                drawBallsOnLayer('net');             // ネットの中を落ちるボール
+                for (const hoop of hoops) hoop.drawFront();
+                drawBallsOnLayer('front');           // 飛行中・跳ね返ったボール
+                for (const popup of popups) popup.draw();
+                drawBonusHud();
+
+                // 次に投げるボール（手元に待機）
+                if (gameState === 'PLAYING' && !balls.some(b => b.phase === 'flight')) {
+                    drawBall(width * 0.5, height * 0.88, 36);
+                }
+
+                if (gameState === 'WAIT_GAMEOVER') {
+                    missedTimer--;
+                    if (missedTimer <= 0) {
+                        triggerGameOver();
+                    }
+                }
+            }
+
+            if (banner) banner.draw();
+            updateShootButton();
+        }
+
+        // ===== 画面の書き換えのタイミング =====
+        // スマホには1秒に90回・120回書き換える画面もある。そのままだとゲーム全体が速くなってしまうので、
+        // 実際の時間に合わせて「1秒に60回」ゲームを進める。
+        // また、縦向きにしている間やアプリを切り替えている間はゲームを一時停止する。
+        const STEP_MS = 1000 / 60;
+        let lastFrameTime = null;
+        let stepAccumulator = 0;
+
+        function isPortrait() {
+            return window.matchMedia('(orientation: portrait)').matches;
+        }
+
+        function frame(now) {
+            requestAnimationFrame(frame);
+            if (lastFrameTime === null) lastFrameTime = now;
+            let dt = now - lastFrameTime;
+            lastFrameTime = now;
+
+            const paused = isPortrait();
+            if (paused || dt > 250) {
+                // 止まっていた時間のぶん、ボーナスタイムの終了時刻も後ろにずらす
+                if (bonusState === 'active') bonusUntil += dt;
+                stepAccumulator = 0;
+                if (paused) return;
+                dt = STEP_MS;
+            }
+
+            stepAccumulator += dt;
+            let steps = 0;
+            while (stepAccumulator >= STEP_MS - 0.5 && steps < 3) {
+                gameLoop();
+                stepAccumulator -= STEP_MS;
+                steps++;
+            }
+            if (steps === 3) stepAccumulator = 0; // 処理が追いつかないときは無理に取り戻さない
+            if (stepAccumulator < 0) stepAccumulator = 0;
+        }
+
+        requestAnimationFrame(frame);
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 200));
+    </script>
+</body>
+</html>
