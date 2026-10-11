@@ -3,7 +3,7 @@
   "short_name": "Swish Streak",
   "description": "連続シュートでスコア倍増！夜のコートで決め続けるバスケットボールゲーム",
   "lang": "ja",
-  "start_url": "./index.html",
+  "start_url": "./swish_streak_mobile.html",
   "scope": "./",
   "display": "fullscreen",
   "orientation": "landscape",
